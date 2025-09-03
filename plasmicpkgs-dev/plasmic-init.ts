@@ -16,7 +16,7 @@ export const PLASMIC = initPlasmicLoader({
       token: projectToken,
     },
   ],
-
+  host: "http://localhost:3003",
   // By default Plasmic will use the last published version of your project.
   // For development, you can set preview to true, which will use the unpublished
   // project, allowing you to see your designs without publishing.  Please

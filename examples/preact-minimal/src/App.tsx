@@ -7,18 +7,19 @@ import {
 const LOADER = initPlasmicLoader({
   projects: [
     {
-      id: "jzrCyUTP1h82GbByDRVb1L",
+      id: "cVdoa5dDiYwQKr4Wff9Y8G",
       token:
-        "YF9LaKBauPomd2UMk0M3JMJ2gDWRejTV8N50kYUv9pECVFPUZdelJgYdxE45aenJMZNe4rvbBb73RqbtwmsQ",
+        "2lfArIVEOaOXqHE44CFFZoEsYKA8fAot6TIYv2pf9uT7rebEADz89LLIk7LDkkr4Az1OYB9TqSKivpHFqDg",
     },
   ],
+  host: "http://localhost:3003",
 });
 
 export function App() {
   return (
     <PlasmicRootProvider loader={LOADER}>
       <PlasmicComponent
-        component="Homepage"
+        component="/test"
         componentProps={{ title: "Minimal Preact app" }}
       />
     </PlasmicRootProvider>
