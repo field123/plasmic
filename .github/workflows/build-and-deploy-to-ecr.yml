@@ -1,0 +1,91 @@
+name: Build and Push to ECR
+
+on:
+  push:
+    branches: 
+      - feat/spike
+      - main
+  workflow_dispatch:  # Allows manual triggering
+
+env:
+  AWS_REGION: eu-west-1
+  ECR_REPOSITORY: plasmic-wab
+
+jobs:
+  build-and-push:
+    runs-on: ubuntu-latest  # This is AMD64
+    outputs:
+      image-tag: ${{ steps.meta.outputs.image-tag }}
+      image-uri: ${{ steps.meta.outputs.image-uri }}
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+      
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ env.AWS_REGION }}
+      
+      - name: Login to Amazon ECR
+        id: login-ecr
+        uses: aws-actions/amazon-ecr-login@v2
+      
+      - name: Set build metadata
+        id: meta
+        run: |
+          echo "image-tag=${{ github.sha }}" >> $GITHUB_OUTPUT
+          echo "image-uri=${{ steps.login-ecr.outputs.registry }}/${{ env.ECR_REPOSITORY }}:${{ github.sha }}" >> $GITHUB_OUTPUT
+      
+      - name: Build, tag, and push image to Amazon ECR
+        env:
+          ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
+          IMAGE_TAG: ${{ steps.meta.outputs.image-tag }}
+        run: |
+          # Build the Docker image
+          cd platform
+          docker build -f wab/Dockerfile -t $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG .
+          
+          # Tag as latest
+          docker tag $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG $ECR_REGISTRY/$ECR_REPOSITORY:latest
+          
+          # Push both tags
+          docker push $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG
+          docker push $ECR_REGISTRY/$ECR_REPOSITORY:latest
+          
+          echo "✅ Image pushed: $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG"
+          echo "✅ Image pushed: $ECR_REGISTRY/$ECR_REPOSITORY:latest"
+  
+  deploy-to-ecs:
+    needs: build-and-push
+    runs-on: ubuntu-latest
+    environment: production  # This requires manual approval
+    if: github.ref == 'refs/heads/main' || github.event_name == 'workflow_dispatch'
+    
+    steps:
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ env.AWS_REGION }}
+      
+      - name: Deploy to ECS
+        run: |
+          echo "🚀 Deploying image: ${{ needs.build-and-push.outputs.image-uri }}"
+          
+          aws ecs update-service \
+            --cluster plasmic-test-cluster \
+            --service plasmic-wab-service \
+            --force-new-deployment \
+            --region ${{ env.AWS_REGION }}
+          
+          echo "⏳ Waiting for service to stabilize..."
+          aws ecs wait services-stable \
+            --cluster plasmic-test-cluster \
+            --services plasmic-wab-service \
+            --region ${{ env.AWS_REGION }}
+          
+          echo "✅ Deployment complete!"
