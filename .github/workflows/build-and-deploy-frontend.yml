@@ -85,6 +85,13 @@ jobs:
           echo "Generating model classes and parsers..."
           make
           echo "✅ Generated required files"
+          
+      - name: Build CSS files
+        working-directory: platform/wab
+        run: |
+          echo "Building CSS files..."
+          yarn build-css
+          echo "✅ CSS files built"
       
       - name: Patch rsbuild.config.ts to remove optional vars
         working-directory: platform/wab
