@@ -61,12 +61,38 @@ jobs:
         run: |
           yarn install --frozen-lockfile
       
+      - name: Create .env file
+        working-directory: platform/wab
+        run: |
+          cat > .env << EOF
+          NODE_ENV=production
+          AMPLITUDE_API_KEY=${{ secrets.AMPLITUDE_API_KEY || '' }}
+          INTERCOM_APP_ID=${{ secrets.INTERCOM_APP_ID || '' }}
+          POSTHOG_API_KEY=${{ secrets.POSTHOG_API_KEY || '' }}
+          POSTHOG_HOST=${{ secrets.POSTHOG_HOST || '' }}
+          POSTHOG_REVERSE_PROXY_HOST=${{ secrets.POSTHOG_REVERSE_PROXY_HOST || '' }}
+          SENTRY_DSN=${{ secrets.SENTRY_DSN || '' }}
+          SENTRY_ORG_ID=${{ secrets.SENTRY_ORG_ID || '' }}
+          SENTRY_PROJECT_ID=${{ secrets.SENTRY_PROJECT_ID || '' }}
+          STRIPE_PUBLISHABLE_KEY=${{ secrets.STRIPE_PUBLISHABLE_KEY || '' }}
+          EOF
+          echo "✅ Created .env file"
+      
       - name: Build frontend
         working-directory: platform/wab
         env:
           NODE_ENV: production
           PUBLIC_URL: ${{ steps.get-cf-url.outputs.cloudfront-url }}
           REACT_APP_DEFAULT_HOST: https://plasmic-test-alb-59233773.eu-west-1.elb.amazonaws.com
+          AMPLITUDE_API_KEY: ${{ secrets.AMPLITUDE_API_KEY || '' }}
+          INTERCOM_APP_ID: ${{ secrets.INTERCOM_APP_ID || '' }}
+          POSTHOG_API_KEY: ${{ secrets.POSTHOG_API_KEY || '' }}
+          POSTHOG_HOST: ${{ secrets.POSTHOG_HOST || '' }}
+          POSTHOG_REVERSE_PROXY_HOST: ${{ secrets.POSTHOG_REVERSE_PROXY_HOST || '' }}
+          SENTRY_DSN: ${{ secrets.SENTRY_DSN || '' }}
+          SENTRY_ORG_ID: ${{ secrets.SENTRY_ORG_ID || '' }}
+          SENTRY_PROJECT_ID: ${{ secrets.SENTRY_PROJECT_ID || '' }}
+          STRIPE_PUBLISHABLE_KEY: ${{ secrets.STRIPE_PUBLISHABLE_KEY || '' }}
         run: |
           yarn build
           echo "✅ Frontend built successfully"
