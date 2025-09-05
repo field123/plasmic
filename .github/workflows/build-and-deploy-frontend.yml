@@ -33,6 +33,11 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
       
+      - name: Install system dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y make
+      
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
@@ -60,6 +65,13 @@ jobs:
         working-directory: platform/wab
         run: |
           yarn install --frozen-lockfile
+      
+      - name: Generate required files
+        working-directory: platform/wab
+        run: |
+          echo "Generating model classes and parsers..."
+          make
+          echo "✅ Generated required files"
       
       - name: Patch rsbuild.config.ts to remove optional vars
         working-directory: platform/wab
