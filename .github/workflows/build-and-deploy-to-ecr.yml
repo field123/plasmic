@@ -97,28 +97,35 @@ RUN yarn config set network-timeout 300000 && yarn config set network-concurrenc
           ECR_REGISTRY=${{ steps.login-ecr.outputs.registry }}
           IMAGE_TAG=${{ steps.meta.outputs.image-tag }}
           
-          # Build the platform list based on what succeeded
-          PLATFORMS=""
-          
-          # AMD64 should always succeed (no continue-on-error)
-          PLATFORMS="$ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG-amd64"
-          
           # Check if ARM64 build succeeded
           if [ "${{ steps.build-arm64.outcome }}" == "success" ]; then
-            PLATFORMS="$PLATFORMS $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG-arm64"
-            echo "✅ Including ARM64 in manifest"
+            echo "✅ Both platforms built successfully, creating multi-platform manifest"
+            
+            # Since docker/build-push-action creates manifest lists even for single platform,
+            # we need to create a new manifest that combines them
+            docker buildx imagetools create \
+              -t $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG \
+              $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG-amd64 \
+              $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG-arm64
+              
+            docker buildx imagetools create \
+              -t $ECR_REGISTRY/$ECR_REPOSITORY:latest \
+              $ECR_REGISTRY/$ECR_REPOSITORY:latest-amd64 \
+              $ECR_REGISTRY/$ECR_REPOSITORY:latest-arm64
           else
-            echo "⚠️  ARM64 build failed, creating AMD64-only manifest"
+            echo "⚠️  ARM64 build failed, creating AMD64-only tags"
+            
+            # Just tag the AMD64 version as the main tags
+            docker buildx imagetools create \
+              -t $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG \
+              $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG-amd64
+              
+            docker buildx imagetools create \
+              -t $ECR_REGISTRY/$ECR_REPOSITORY:latest \
+              $ECR_REGISTRY/$ECR_REPOSITORY:latest-amd64
           fi
           
-          # Create multi-platform manifests
-          docker manifest create $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG $PLATFORMS
-          docker manifest push $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG
-          
-          docker manifest create --amend $ECR_REGISTRY/$ECR_REPOSITORY:latest $PLATFORMS
-          docker manifest push $ECR_REGISTRY/$ECR_REPOSITORY:latest
-          
-          echo "✅ Manifest created and pushed with platforms: $PLATFORMS"
+          echo "✅ Multi-platform tags created successfully"
 
   deploy-to-ecs:
     needs: build-and-push
