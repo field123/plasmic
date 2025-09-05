@@ -67,8 +67,8 @@ jobs:
           echo "image-tag=${{ github.sha }}" >> $GITHUB_OUTPUT
           echo "image-uri=${{ steps.login-ecr.outputs.registry }}/${{ env.ECR_REPOSITORY }}:${{ github.sha }}" >> $GITHUB_OUTPUT
 
-      - name: Build and push Docker image (AMD64)
-        id: build-amd64
+      - name: Build and push Docker image
+        id: build
         uses: docker/build-push-action@v6
         with:
           context: ./platform
@@ -76,60 +76,10 @@ jobs:
           platforms: linux/amd64
           push: true
           tags: |
-            ${{ steps.login-ecr.outputs.registry }}/${{ env.ECR_REPOSITORY }}:${{ steps.meta.outputs.image-tag }}-amd64
-            ${{ steps.login-ecr.outputs.registry }}/${{ env.ECR_REPOSITORY }}:latest-amd64
+            ${{ steps.login-ecr.outputs.registry }}/${{ env.ECR_REPOSITORY }}:${{ steps.meta.outputs.image-tag }}
+            ${{ steps.login-ecr.outputs.registry }}/${{ env.ECR_REPOSITORY }}:latest
           cache-from: type=gha
           cache-to: type=gha,mode=max
-
-      - name: Build and push Docker image (ARM64)
-        id: build-arm64
-        uses: docker/build-push-action@v6
-        continue-on-error: true
-        with:
-          context: ./platform
-          file: ./platform/wab/Dockerfile.modified
-          platforms: linux/arm64
-          push: true
-          tags: |
-            ${{ steps.login-ecr.outputs.registry }}/${{ env.ECR_REPOSITORY }}:${{ steps.meta.outputs.image-tag }}-arm64
-            ${{ steps.login-ecr.outputs.registry }}/${{ env.ECR_REPOSITORY }}:latest-arm64
-          cache-from: type=gha
-          cache-to: type=gha,mode=max
-
-      - name: Create and push multi-platform manifest
-        run: |
-          ECR_REGISTRY=${{ steps.login-ecr.outputs.registry }}
-          IMAGE_TAG=${{ steps.meta.outputs.image-tag }}
-
-          # Check if ARM64 build succeeded
-          if [ "${{ steps.build-arm64.outcome }}" == "success" ]; then
-            echo "✅ Both platforms built successfully, creating multi-platform manifest"
-            
-            # Since docker/build-push-action creates manifest lists even for single platform,
-            # we need to create a new manifest that combines them
-            docker buildx imagetools create \
-              -t $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG \
-              $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG-amd64 \
-              $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG-arm64
-              
-            docker buildx imagetools create \
-              -t $ECR_REGISTRY/$ECR_REPOSITORY:latest \
-              $ECR_REGISTRY/$ECR_REPOSITORY:latest-amd64 \
-              $ECR_REGISTRY/$ECR_REPOSITORY:latest-arm64
-          else
-            echo "⚠️  ARM64 build failed, creating AMD64-only tags"
-            
-            # Just tag the AMD64 version as the main tags
-            docker buildx imagetools create \
-              -t $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG \
-              $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG-amd64
-              
-            docker buildx imagetools create \
-              -t $ECR_REGISTRY/$ECR_REPOSITORY:latest \
-              $ECR_REGISTRY/$ECR_REPOSITORY:latest-amd64
-          fi
-
-          echo "✅ Multi-platform tags created successfully"
 
   deploy-to-ecs:
     needs: build-and-push
