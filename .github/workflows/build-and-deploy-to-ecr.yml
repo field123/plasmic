@@ -27,18 +27,21 @@ jobs:
         uses: actions/checkout@v4
 
       - name: Modify Dockerfile for optimized yarn builds
+        shell: bash
         run: |
-          # Create a modified Dockerfile that adds yarn config before each yarn install
+          set -euo pipefail
           cp platform/wab/Dockerfile platform/wab/Dockerfile.modified
-          
-          # Add yarn config after the builder FROM statement
-          sed -i '/^FROM node:24-alpine AS builder$/a\
-\nRUN yarn config set network-timeout 300000 \&\& yarn config set network-concurrency 2 \&\& yarn config set registry https://registry.npmjs.org' platform/wab/Dockerfile.modified
-          
-          # Add yarn config after the runner FROM statement  
-          sed -i '/^FROM node:24-alpine AS runner$/a\
-\nRUN yarn config set network-timeout 300000 \&\& yarn config set network-concurrency 2 \&\& yarn config set registry https://registry.npmjs.org' platform/wab/Dockerfile.modified
-          
+
+          # Insert after the builder stage
+          awk '1; /^FROM node:24-alpine AS builder$/ {
+            print "RUN yarn config set network-timeout 300000 && yarn config set network-concurrency 2 && yarn config set registry https://registry.npmjs.org"
+          }' platform/wab/Dockerfile.modified > platform/wab/Dockerfile.tmp && mv platform/wab/Dockerfile.tmp platform/wab/Dockerfile.modified
+
+          # Insert after the runner stage
+          awk '1; /^FROM node:24-alpine AS runner$/ {
+            print "RUN yarn config set network-timeout 300000 && yarn config set network-concurrency 2 && yarn config set registry https://registry.npmjs.org"
+          }' platform/wab/Dockerfile.modified > platform/wab/Dockerfile.tmp && mv platform/wab/Dockerfile.tmp platform/wab/Dockerfile.modified
+
           echo "✅ Modified Dockerfile for optimized builds"
 
       - name: Configure AWS credentials
@@ -97,7 +100,7 @@ jobs:
         run: |
           ECR_REGISTRY=${{ steps.login-ecr.outputs.registry }}
           IMAGE_TAG=${{ steps.meta.outputs.image-tag }}
-          
+
           # Check if ARM64 build succeeded
           if [ "${{ steps.build-arm64.outcome }}" == "success" ]; then
             echo "✅ Both platforms built successfully, creating multi-platform manifest"
@@ -125,7 +128,7 @@ jobs:
               -t $ECR_REGISTRY/$ECR_REPOSITORY:latest \
               $ECR_REGISTRY/$ECR_REPOSITORY:latest-amd64
           fi
-          
+
           echo "✅ Multi-platform tags created successfully"
 
   deploy-to-ecs:
