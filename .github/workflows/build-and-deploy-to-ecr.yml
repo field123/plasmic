@@ -26,6 +26,20 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
 
+      - name: Modify Dockerfile for optimized yarn builds
+        run: |
+          # Create a modified Dockerfile that adds yarn config before each yarn install
+          cp platform/wab/Dockerfile platform/wab/Dockerfile.modified
+          
+          # Add yarn config after each FROM statement
+          sed -i '/^FROM node:24-alpine AS builder$/a\
+RUN yarn config set network-timeout 300000 && yarn config set network-concurrency 2 && yarn config set registry https://registry.npmjs.org' platform/wab/Dockerfile.modified
+          
+          sed -i '/^FROM node:24-alpine AS runner$/a\
+RUN yarn config set network-timeout 300000 && yarn config set network-concurrency 2 && yarn config set registry https://registry.npmjs.org' platform/wab/Dockerfile.modified
+          
+          echo "✅ Modified Dockerfile for optimized builds"
+
       - name: Configure AWS credentials
         uses: aws-actions/configure-aws-credentials@v4
         with:
@@ -54,7 +68,7 @@ jobs:
         uses: docker/build-push-action@v6
         with:
           context: ./platform
-          file: ./platform/wab/Dockerfile
+          file: ./platform/wab/Dockerfile.modified
           platforms: linux/amd64
           push: true
           tags: |
@@ -69,7 +83,7 @@ jobs:
         continue-on-error: true
         with:
           context: ./platform
-          file: ./platform/wab/Dockerfile
+          file: ./platform/wab/Dockerfile.modified
           platforms: linux/arm64
           push: true
           tags: |
