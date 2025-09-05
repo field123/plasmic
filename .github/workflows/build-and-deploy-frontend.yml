@@ -44,7 +44,7 @@ jobs:
         uses: aws-actions/configure-aws-credentials@v4
         with:
           role-to-assume: arn:aws:iam::${{ secrets.AWS_ACCOUNT }}:role/${{ secrets.AWS_ROLE }}
-          role-session-name: GitHubActions-Frontend
+          role-session-name: GitHubActions-Deploy
           aws-region: ${{ env.AWS_REGION }}
       
       - name: Get CloudFront URL
@@ -54,6 +54,7 @@ jobs:
           CF_DOMAIN=$(aws cloudfront get-distribution --id ${{ env.CLOUDFRONT_DISTRIBUTION_ID }} \
             --query 'Distribution.DomainName' --output text)
           echo "cloudfront-url=https://${CF_DOMAIN}" >> $GITHUB_OUTPUT
+      
       
       - name: Install dependencies
         working-directory: platform/wab
