@@ -61,10 +61,23 @@ jobs:
           echo "cloudfront-url=https://${CF_DOMAIN}" >> $GITHUB_OUTPUT
       
       
-      - name: Install dependencies
+      - name: Install root dependencies
+        run: |
+          yarn install --frozen-lockfile
+          
+      - name: Setup monorepo packages
+        run: |
+          echo "Setting up all packages..."
+          yarn setup
+          yarn setup:canvas-packages
+          echo "✅ Setup complete"
+          
+      - name: Install wab dependencies
         working-directory: platform/wab
         run: |
           yarn install --frozen-lockfile
+          # Install missing raw-loader
+          yarn add --dev raw-loader
       
       - name: Generate required files
         working-directory: platform/wab
