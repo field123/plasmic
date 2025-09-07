@@ -126,7 +126,7 @@ jobs:
         env:
           NODE_ENV: production
           PUBLIC_URL: ${{ steps.get-cf-url.outputs.cloudfront-url }}
-          REACT_APP_DEFAULT_HOST: https://plasmic-test-alb-59233773.eu-west-1.elb.amazonaws.com
+          REACT_APP_DEFAULT_HOST_URL: https://host.plasmicdev.rcf.dev/static/host.html
         run: |
           yarn build
           echo "✅ Frontend built successfully"
@@ -166,39 +166,39 @@ jobs:
             --distribution-id ${{ env.CLOUDFRONT_DISTRIBUTION_ID }} \
             --paths "/index.html" "/*"
           echo "✅ CloudFront invalidation created"
-      
+
       - name: Deploy Host Files to S3
         working-directory: platform/wab
         run: |
           echo "Deploying host files to separate S3 bucket..."
-          
+
           # Create deployment directory
           mkdir -p ../../host-deploy/static
-          
+
           # Copy host files - maintaining the /static/ structure
           cp build/static/host.html ../../host-deploy/static/
           cp -r build/static/sub ../../host-deploy/static/
           cp build/static/popup.html ../../host-deploy/static/
           mkdir -p ../../host-deploy/static/styles
           cp -r build/static/styles/* ../../host-deploy/static/styles/ || true
-          
+
           # Deploy to Host S3 bucket
           aws s3 sync ../../host-deploy/ s3://${{ env.HOST_S3_BUCKET }}/ \
             --delete \
             --cache-control "public, max-age=31536000, immutable" \
             --exclude "*.html"
-          
+
           # Upload HTML files with shorter cache
           aws s3 cp ../../host-deploy/static/host.html s3://${{ env.HOST_S3_BUCKET }}/static/host.html \
             --cache-control "public, max-age=300" \
             --content-type "text/html"
-          
+
           aws s3 cp ../../host-deploy/static/popup.html s3://${{ env.HOST_S3_BUCKET }}/static/popup.html \
             --cache-control "public, max-age=300" \
             --content-type "text/html"
-          
+
           echo "✅ Host files deployed to S3"
-      
+
       - name: Invalidate Host CloudFront
         run: |
           aws cloudfront create-invalidation \
