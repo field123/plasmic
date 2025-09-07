@@ -19,38 +19,39 @@ env:
 jobs:
   deploy-host:
     runs-on: ubuntu-latest
-    
+
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
-      
+
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: '20'
-          cache: 'yarn'
-      
+          node-version: "20"
+          cache: "yarn"
+
       - name: Configure AWS credentials
         uses: aws-actions/configure-aws-credentials@v4
         with:
-          role-to-assume: arn:aws:iam::${{ secrets.AWS_ACCOUNT_ID }}:role/github-actions-role
+          role-to-assume: arn:aws:iam::${{ secrets.AWS_ACCOUNT }}:role/${{ secrets.AWS_ROLE }}
+          role-session-name: GitHubActions-Deploy
           aws-region: ${{ env.AWS_REGION }}
-      
+
       - name: Install dependencies
         run: |
           cd platform/wab
           yarn install --frozen-lockfile
-      
+
       - name: Build WAB
         run: |
           cd platform/wab
           yarn build
-      
+
       - name: Extract and deploy host files
         run: |
           # Create deployment directory
           mkdir -p host-deploy
-          
+
           # Copy host files - maintaining the /static/ structure
           mkdir -p host-deploy/static
           cp platform/wab/build/static/host.html host-deploy/static/
@@ -58,22 +59,22 @@ jobs:
           cp platform/wab/build/static/popup.html host-deploy/static/
           mkdir -p host-deploy/static/styles
           cp -r platform/wab/build/static/styles/* host-deploy/static/styles/ || true
-          
+
           # Deploy to S3
           aws s3 sync host-deploy/ s3://${{ env.S3_BUCKET }}/ \
             --delete \
             --cache-control "public, max-age=31536000, immutable" \
             --exclude "*.html"
-          
+
           # Upload HTML files with shorter cache
           aws s3 cp host-deploy/static/host.html s3://${{ env.S3_BUCKET }}/static/host.html \
             --cache-control "public, max-age=300" \
             --content-type "text/html"
-          
+
           aws s3 cp host-deploy/static/popup.html s3://${{ env.S3_BUCKET }}/static/popup.html \
             --cache-control "public, max-age=300" \
             --content-type "text/html"
-      
+
       - name: Invalidate CloudFront cache
         run: |
           aws cloudfront create-invalidation \
