@@ -8,13 +8,13 @@ on:
   workflow_dispatch:
     inputs:
       environment:
-        description: 'Deployment environment'
+        description: "Deployment environment"
         required: true
-        default: 'staging'
+        default: "staging"
         type: choice
         options:
-        - staging
-        - production
+          - staging
+          - production
 
 permissions:
   id-token: write
@@ -24,34 +24,35 @@ env:
   AWS_REGION: eu-west-1
   S3_BUCKET: plasmic-frontend-${{ github.event.inputs.environment || 'staging' }}
   CLOUDFRONT_DISTRIBUTION_ID: ${{ secrets.CLOUDFRONT_DISTRIBUTION_ID }}
+  REACT_APP_DEFAULT_HOST_URL: https://host.plasmicdev.rcf.dev/static/host.html
 
 jobs:
   build-and-deploy-frontend:
     runs-on: ubuntu-latest
-    
+
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
-      
+
       - name: Install system dependencies
         run: |
           sudo apt-get update
           sudo apt-get install -y make
-      
+
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: '24'
-          cache: 'yarn'
+          node-version: "24"
+          cache: "yarn"
           cache-dependency-path: platform/wab/yarn.lock
-      
+
       - name: Configure AWS credentials
         uses: aws-actions/configure-aws-credentials@v4
         with:
           role-to-assume: arn:aws:iam::${{ secrets.AWS_ACCOUNT }}:role/${{ secrets.AWS_ROLE }}
           role-session-name: GitHubActions-Deploy
           aws-region: ${{ env.AWS_REGION }}
-      
+
       - name: Get CloudFront URL
         id: get-cf-url
         run: |
@@ -59,46 +60,45 @@ jobs:
           CF_DOMAIN=$(aws cloudfront get-distribution --id ${{ env.CLOUDFRONT_DISTRIBUTION_ID }} \
             --query 'Distribution.DomainName' --output text)
           echo "cloudfront-url=https://${CF_DOMAIN}" >> $GITHUB_OUTPUT
-      
-      
+
       - name: Install root dependencies
         run: |
           yarn install --frozen-lockfile
-          
+
       - name: Setup monorepo packages
         run: |
           echo "Setting up all packages..."
           yarn setup
           yarn setup:canvas-packages
           echo "✅ Setup complete"
-          
+
       - name: Install wab dependencies
         working-directory: platform/wab
         run: |
           yarn install --frozen-lockfile
           # Install missing raw-loader
           yarn add --dev raw-loader
-      
+
       - name: Generate required files
         working-directory: platform/wab
         run: |
           echo "Generating model classes and parsers..."
           make
           echo "✅ Generated required files"
-          
+
       - name: Build CSS files
         working-directory: platform/wab
         run: |
           echo "Building CSS files..."
           yarn build-css
           echo "✅ CSS files built"
-      
+
       - name: Patch rsbuild.config.ts to remove optional vars
         working-directory: platform/wab
         run: |
           # Create a backup
           cp rsbuild.config.ts rsbuild.config.ts.backup
-          
+
           # Use Node.js to patch the file
           node -e "
             const fs = require('fs');
@@ -118,7 +118,7 @@ jobs:
             fs.writeFileSync('rsbuild.config.ts', content);
             console.log('✅ Patched rsbuild.config.ts to remove optional environment variables');
           "
-      
+
       - name: Build frontend
         working-directory: platform/wab
         env:
@@ -129,7 +129,7 @@ jobs:
           yarn build
           echo "✅ Frontend built successfully"
           ls -la build/
-      
+
       - name: Deploy to S3
         working-directory: platform/wab
         run: |
@@ -141,30 +141,30 @@ jobs:
             --exclude "*.map" \
             --exclude "static/js/*.js" \
             --exclude "static/css/*.css"
-          
+
           # Upload JS and CSS with specific cache headers
           aws s3 sync build/static/js s3://${{ env.S3_BUCKET }}/static/js \
             --cache-control "public, max-age=31536000, immutable" \
             --content-type "application/javascript"
-          
+
           aws s3 sync build/static/css s3://${{ env.S3_BUCKET }}/static/css \
             --cache-control "public, max-age=31536000, immutable" \
             --content-type "text/css"
-          
+
           # Upload index.html with no-cache
           aws s3 cp build/index.html s3://${{ env.S3_BUCKET }}/ \
             --cache-control "no-cache, no-store, must-revalidate" \
             --content-type "text/html"
-          
+
           echo "✅ Deployed to S3"
-      
+
       - name: Invalidate CloudFront
         run: |
           aws cloudfront create-invalidation \
             --distribution-id ${{ env.CLOUDFRONT_DISTRIBUTION_ID }} \
             --paths "/index.html" "/*"
           echo "✅ CloudFront invalidation created"
-      
+
       - name: Summary
         run: |
           echo "## Deployment Summary" >> $GITHUB_STEP_SUMMARY
