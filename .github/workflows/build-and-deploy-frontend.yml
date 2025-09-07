@@ -24,6 +24,8 @@ env:
   AWS_REGION: eu-west-1
   S3_BUCKET: plasmic-frontend-${{ github.event.inputs.environment || 'staging' }}
   CLOUDFRONT_DISTRIBUTION_ID: ${{ secrets.CLOUDFRONT_DISTRIBUTION_ID }}
+  HOST_S3_BUCKET: plasmic-host-static
+  HOST_CLOUDFRONT_DISTRIBUTION_ID: ${{ secrets.HOST_CLOUDFRONT_DISTRIBUTION_ID }}
   REACT_APP_DEFAULT_HOST_URL: https://host.plasmicdev.rcf.dev/static/host.html
 
 jobs:
@@ -164,11 +166,53 @@ jobs:
             --distribution-id ${{ env.CLOUDFRONT_DISTRIBUTION_ID }} \
             --paths "/index.html" "/*"
           echo "✅ CloudFront invalidation created"
+      
+      - name: Deploy Host Files to S3
+        working-directory: platform/wab
+        run: |
+          echo "Deploying host files to separate S3 bucket..."
+          
+          # Create deployment directory
+          mkdir -p ../../host-deploy/static
+          
+          # Copy host files - maintaining the /static/ structure
+          cp build/static/host.html ../../host-deploy/static/
+          cp -r build/static/sub ../../host-deploy/static/
+          cp build/static/popup.html ../../host-deploy/static/
+          mkdir -p ../../host-deploy/static/styles
+          cp -r build/static/styles/* ../../host-deploy/static/styles/ || true
+          
+          # Deploy to Host S3 bucket
+          aws s3 sync ../../host-deploy/ s3://${{ env.HOST_S3_BUCKET }}/ \
+            --delete \
+            --cache-control "public, max-age=31536000, immutable" \
+            --exclude "*.html"
+          
+          # Upload HTML files with shorter cache
+          aws s3 cp ../../host-deploy/static/host.html s3://${{ env.HOST_S3_BUCKET }}/static/host.html \
+            --cache-control "public, max-age=300" \
+            --content-type "text/html"
+          
+          aws s3 cp ../../host-deploy/static/popup.html s3://${{ env.HOST_S3_BUCKET }}/static/popup.html \
+            --cache-control "public, max-age=300" \
+            --content-type "text/html"
+          
+          echo "✅ Host files deployed to S3"
+      
+      - name: Invalidate Host CloudFront
+        run: |
+          aws cloudfront create-invalidation \
+            --distribution-id ${{ env.HOST_CLOUDFRONT_DISTRIBUTION_ID }} \
+            --paths "/*"
+          echo "✅ Host CloudFront invalidation created"
 
       - name: Summary
         run: |
           echo "## Deployment Summary" >> $GITHUB_STEP_SUMMARY
           echo "- **Frontend URL**: ${{ steps.get-cf-url.outputs.cloudfront-url }}" >> $GITHUB_STEP_SUMMARY
+          echo "- **Host URL**: https://host.plasmicdev.rcf.dev/static/host.html" >> $GITHUB_STEP_SUMMARY
           echo "- **Backend API**: https://plasmic-test-alb-59233773.eu-west-1.elb.amazonaws.com" >> $GITHUB_STEP_SUMMARY
           echo "- **S3 Bucket**: ${{ env.S3_BUCKET }}" >> $GITHUB_STEP_SUMMARY
+          echo "- **Host S3 Bucket**: ${{ env.HOST_S3_BUCKET }}" >> $GITHUB_STEP_SUMMARY
           echo "- **CloudFront Distribution**: ${{ env.CLOUDFRONT_DISTRIBUTION_ID }}" >> $GITHUB_STEP_SUMMARY
+          echo "- **Host CloudFront Distribution**: ${{ env.HOST_CLOUDFRONT_DISTRIBUTION_ID }}" >> $GITHUB_STEP_SUMMARY
