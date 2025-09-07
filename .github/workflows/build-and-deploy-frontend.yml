@@ -128,6 +128,9 @@ jobs:
           PUBLIC_URL: ${{ steps.get-cf-url.outputs.cloudfront-url }}
           REACT_APP_DEFAULT_HOST_URL: https://host.plasmicdev.rcf.dev/static/host.html
         run: |
+          # Export the environment variable explicitly
+          export REACT_APP_DEFAULT_HOST_URL="https://host.plasmicdev.rcf.dev/static/host.html"
+          echo "Building with REACT_APP_DEFAULT_HOST_URL=$REACT_APP_DEFAULT_HOST_URL"
           yarn build
           echo "✅ Frontend built successfully"
           ls -la build/
