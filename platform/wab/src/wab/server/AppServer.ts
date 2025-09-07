@@ -2180,7 +2180,13 @@ export function makeExpressSessionMiddleware(config: Config) {
       cleanupLimit: 0,
       // By not using a subquery, maybe less likely for deadlock
       limitSubquery: false,
-      onError: () => {},
+      onError: (store, error) => {
+        logger().error("Session store error", {
+          error: error.message,
+          stack: error.stack,
+          name: error.name
+        });
+      },
       //ttl: 86400,
     }).connect(getConnection().getRepository(ExpressSession)),
   });
