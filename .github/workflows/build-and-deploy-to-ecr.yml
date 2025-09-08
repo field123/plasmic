@@ -14,6 +14,7 @@ permissions:
 env:
   AWS_REGION: eu-west-1
   ECR_REPOSITORY: plasmic-wab
+  CACHE_VERSION: v2  # Increment this to bust cache
 
 jobs:
   build-and-push:
@@ -78,8 +79,8 @@ jobs:
           tags: |
             ${{ steps.login-ecr.outputs.registry }}/${{ env.ECR_REPOSITORY }}:${{ steps.meta.outputs.image-tag }}
             ${{ steps.login-ecr.outputs.registry }}/${{ env.ECR_REPOSITORY }}:latest
-          cache-from: type=gha
-          cache-to: type=gha,mode=max
+          cache-from: type=gha,scope=${{ github.ref_name }}-${{ env.CACHE_VERSION }}-${{ hashFiles('platform/**') }}
+          cache-to: type=gha,mode=max,scope=${{ github.ref_name }}-${{ env.CACHE_VERSION }}-${{ hashFiles('platform/**') }}
 
   deploy-to-ecs:
     needs: build-and-push
