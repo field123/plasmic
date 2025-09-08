@@ -95,7 +95,7 @@ jobs:
           yarn build-css
           echo "✅ CSS files built"
 
-      - name: Patch rsbuild.config.ts to remove optional vars
+      - name: Patch rsbuild.config.ts to configure environment variables
         working-directory: platform/wab
         run: |
           # Create a backup
@@ -117,8 +117,14 @@ jobs:
             content = content.replace(/SENTRY_PROJECT_ID: OPTIONAL_VAR,\\n/g, '');
             content = content.replace(/STRIPE_PUBLISHABLE_KEY: OPTIONAL_VAR,\\n/g, '');
             
+            // Add REACT_APP_DEFAULT_HOST_URL to DefinePlugin
+            content = content.replace(
+              /PUBLICPATH: publicUrl,/,
+              'PUBLICPATH: publicUrl,\\n            REACT_APP_DEFAULT_HOST_URL: \"https://host.plasmicdev.rcf.dev/static/host.html\",'
+            );
+            
             fs.writeFileSync('rsbuild.config.ts', content);
-            console.log('✅ Patched rsbuild.config.ts to remove optional environment variables');
+            console.log('✅ Patched rsbuild.config.ts to configure environment variables');
           "
 
       - name: Build frontend
