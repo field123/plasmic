@@ -200,6 +200,7 @@ import {
   createPkgByProjectId,
   createProject,
   createProjectWithHostlessPackages,
+  debugMigrations,
   deleteBranch,
   deleteProject,
   fmtCode,
@@ -1568,6 +1569,7 @@ export function addMainAppServerRoutes(
   app.get("/api/v1/plume-pkg", withNext(getPlumePkg));
   app.get("/api/v1/plume-pkg/versions", withNext(getPlumePkgVersionStrings));
   app.get("/api/v1/plume-pkg/latest", withNext(getLatestPlumePkg));
+  app.get("/api/v1/debug/migrations", withNext(debugMigrations));
   app.get("/api/v1/pkgs/:pkgId", withNext(getPkgVersion));
   app.get(
     "/api/v1/pkgs/projectId/:projectId",

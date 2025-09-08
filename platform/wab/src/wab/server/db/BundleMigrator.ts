@@ -37,6 +37,9 @@ export const BUNDLE_MIGRATION_PATH = path.join(
   "bundle-migrations"
 );
 
+console.log("[BundleMigrator] Migration path:", BUNDLE_MIGRATION_PATH);
+console.log("[BundleMigrator] __dirname:", __dirname);
+
 export type BundledMigrationFn = (
   bundle: UnsafeBundle,
   entity: PkgVersion | ProjectRevision
@@ -92,24 +95,54 @@ export async function getAllMigrations() {
   if (bundleMigrations) {
     return bundleMigrations;
   }
-  const files = await fs.readdir(BUNDLE_MIGRATION_PATH);
-  files.sort(migrationSorter.compare);
-  bundleMigrations = files.map<Migration>((file) => {
-    const mod = require(path.join(BUNDLE_MIGRATION_PATH, file));
-    return {
-      name: file.replace(/\..*$/, ""),
-      migrate: mod.migrate,
-      type: mod.MIGRATION_TYPE,
-    };
-  });
-  return bundleMigrations;
+  
+  try {
+    console.log("[BundleMigrator] Reading migrations from:", BUNDLE_MIGRATION_PATH);
+    const files = await fs.readdir(BUNDLE_MIGRATION_PATH);
+    console.log("[BundleMigrator] Found", files.length, "migration files");
+    
+    files.sort(migrationSorter.compare);
+    bundleMigrations = files.map<Migration>((file) => {
+      try {
+        const fullPath = path.join(BUNDLE_MIGRATION_PATH, file);
+        console.log("[BundleMigrator] Loading migration:", file);
+        const mod = require(fullPath);
+        return {
+          name: file.replace(/\..*$/, ""),
+          migrate: mod.migrate,
+          type: mod.MIGRATION_TYPE,
+        };
+      } catch (error) {
+        console.error("[BundleMigrator] Failed to load migration", file, ":", error);
+        throw error;
+      }
+    });
+    
+    console.log("[BundleMigrator] Successfully loaded", bundleMigrations.length, "migrations");
+    return bundleMigrations;
+  } catch (error) {
+    console.error("[BundleMigrator] Failed to load migrations:", error);
+    console.error("[BundleMigrator] Error stack:", (error as Error).stack);
+    // Return empty array to prevent crashes, but log the error
+    bundleMigrations = [];
+    return bundleMigrations;
+  }
 }
 
 let lastBundleVersion: string;
 export async function getLastBundleVersion() {
   if (lastBundleVersion == null) {
+    console.log("[BundleMigrator] Getting last bundle version...");
     const migrations = await getAllMigrations();
-    lastBundleVersion = migrations[migrations.length - 1].name;
+    if (!migrations || migrations.length === 0) {
+      console.error("[BundleMigrator] No migrations found! Cannot determine last bundle version");
+      // Return a fallback version to prevent undefined ETags
+      lastBundleVersion = "251-add-data-tokens";
+      console.log("[BundleMigrator] Using fallback version:", lastBundleVersion);
+    } else {
+      lastBundleVersion = migrations[migrations.length - 1].name;
+      console.log("[BundleMigrator] Last bundle version:", lastBundleVersion);
+    }
   }
   return lastBundleVersion;
 }

@@ -1715,6 +1715,57 @@ export async function getPlumePkg(req: Request, res: Response) {
   res.json(await getPkgWithDeps(mgr, pkg));
 }
 
+export async function debugMigrations(req: Request, res: Response) {
+  try {
+    const fs = require("fs/promises");
+    const path = require("path");
+    const { BUNDLE_MIGRATION_PATH } = require("@/wab/server/db/BundleMigrator");
+    
+    // Check if directory exists
+    let dirExists = false;
+    let files: string[] = [];
+    let dirStats: any = null;
+    
+    try {
+      dirStats = await fs.stat(BUNDLE_MIGRATION_PATH);
+      dirExists = dirStats.isDirectory();
+      if (dirExists) {
+        files = await fs.readdir(BUNDLE_MIGRATION_PATH);
+      }
+    } catch (error) {
+      console.error("Error checking migration directory:", error);
+    }
+    
+    const version = await getLastBundleVersion();
+    const migrations = await require("@/wab/server/db/BundleMigrator").getAllMigrations();
+    
+    res.json({
+      debug: {
+        BUNDLE_MIGRATION_PATH,
+        __dirname: __dirname,
+        cwd: process.cwd(),
+        dirExists,
+        dirStats,
+        fileCount: files.length,
+        firstFewFiles: files.slice(0, 5),
+        lastFewFiles: files.slice(-5),
+        migrationsLoaded: migrations.length,
+        lastBundleVersion: version,
+        REAL_PLUME_VERSION,
+        nodeVersion: process.version,
+        platform: process.platform,
+        expectedEtag: `W/"plume-pkg-${REAL_PLUME_VERSION}-${version}"`,
+      }
+    });
+  } catch (error) {
+    console.error("Debug endpoint error:", error);
+    res.status(500).json({
+      error: (error as Error).message,
+      stack: (error as Error).stack
+    });
+  }
+}
+
 export async function getPlumePkgVersionStrings(req: Request, res: Response) {
   const mgr = superDbMgr(req);
   const versionStrings = await mgr.getPlumePkgVersionStrings();
