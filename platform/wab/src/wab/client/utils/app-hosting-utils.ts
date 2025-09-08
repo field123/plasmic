@@ -1,6 +1,6 @@
 import { reportError } from "@/wab/client/ErrorNotifications";
-import { DEVFLAGS, DevFlagsType } from "@/wab/shared/devflags";
 import { ApiBranch, ApiProject } from "@/wab/shared/ApiSchema";
+import { DEVFLAGS, DevFlagsType } from "@/wab/shared/devflags";
 
 export function getHostUrl(
   project: ApiProject,
@@ -9,6 +9,9 @@ export function getHostUrl(
   fixHostOrigin: boolean = false
 ) {
   if (appConfig.ccStubs) {
+    console.log(
+      `getHostUrl appConfig.ccStubs was true ${appConfig.defaultHostUrl}`
+    );
     return appConfig.defaultHostUrl;
   }
   const urlString =
@@ -16,6 +19,8 @@ export function getHostUrl(
     branch?.hostUrl ||
     project.hostUrl ||
     appConfig.defaultHostUrl;
+
+  console.log(`getHostUrl urlString was ${urlString}`);
   const url = new URL(urlString);
 
   // We need to avoid redirects to different origins to avoid CORS errors when
