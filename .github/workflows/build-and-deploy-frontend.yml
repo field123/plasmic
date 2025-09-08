@@ -95,48 +95,55 @@ jobs:
           yarn build-css
           echo "✅ CSS files built"
 
-      - name: Patch rsbuild.config.ts to configure environment variables
+      - name: Create .env file with environment variables
         working-directory: platform/wab
         run: |
-          # Create a backup
-          cp rsbuild.config.ts rsbuild.config.ts.backup
+          # Create .env file with required environment variables
+          cat > .env << EOF
+          REACT_APP_DEFAULT_HOST_URL=https://host.plasmicdev.rcf.dev/static/host.html
+          AMPLITUDE_API_KEY=
+          INTERCOM_APP_ID=
+          POSTHOG_API_KEY=
+          POSTHOG_HOST=
+          POSTHOG_REVERSE_PROXY_HOST=
+          SENTRY_DSN=
+          SENTRY_ORG_ID=
+          SENTRY_PROJECT_ID=
+          STRIPE_PUBLISHABLE_KEY=
+          EOF
+          
+          echo "✅ Created .env file with environment variables"
+          echo "Contents of .env:"
+          cat .env
 
-          # Use Node.js to patch the file
+      - name: Patch rsbuild.config.ts to include REACT_APP_DEFAULT_HOST_URL
+        working-directory: platform/wab
+        run: |
+          # Use Node.js to patch the DefinePlugin configuration
           node -e "
             const fs = require('fs');
             let content = fs.readFileSync('rsbuild.config.ts', 'utf8');
             
-            // Remove the OPTIONAL_VAR lines
-            content = content.replace(/AMPLITUDE_API_KEY: OPTIONAL_VAR,\\n/g, '');
-            content = content.replace(/INTERCOM_APP_ID: OPTIONAL_VAR,\\n/g, '');
-            content = content.replace(/POSTHOG_API_KEY: OPTIONAL_VAR,\\n/g, '');
-            content = content.replace(/POSTHOG_HOST: OPTIONAL_VAR,\\n/g, '');
-            content = content.replace(/POSTHOG_REVERSE_PROXY_HOST: OPTIONAL_VAR,\\n/g, '');
-            content = content.replace(/SENTRY_DSN: OPTIONAL_VAR,\\n/g, '');
-            content = content.replace(/SENTRY_ORG_ID: OPTIONAL_VAR,\\n/g, '');
-            content = content.replace(/SENTRY_PROJECT_ID: OPTIONAL_VAR,\\n/g, '');
-            content = content.replace(/STRIPE_PUBLISHABLE_KEY: OPTIONAL_VAR,\\n/g, '');
-            
-            // Add REACT_APP_DEFAULT_HOST_URL to DefinePlugin
+            // Find the DefinePlugin configuration and add REACT_APP_DEFAULT_HOST_URL
             content = content.replace(
-              /PUBLICPATH: publicUrl,/,
-              'PUBLICPATH: publicUrl,\\n            REACT_APP_DEFAULT_HOST_URL: \"https://host.plasmicdev.rcf.dev/static/host.html\",'
+              /(STRIPE_PUBLISHABLE_KEY: OPTIONAL_VAR,)(\s*\}\))/,
+              '$1\n            REACT_APP_DEFAULT_HOST_URL: REQUIRED_VAR,$2'
             );
             
             fs.writeFileSync('rsbuild.config.ts', content);
-            console.log('✅ Patched rsbuild.config.ts to configure environment variables');
+            console.log('✅ Patched rsbuild.config.ts to include REACT_APP_DEFAULT_HOST_URL');
           "
+          
+          echo "Showing the DefinePlugin section:"
+          grep -A 15 "new DefinePlugin" rsbuild.config.ts
 
       - name: Build frontend
         working-directory: platform/wab
         env:
           NODE_ENV: production
           PUBLIC_URL: ${{ steps.get-cf-url.outputs.cloudfront-url }}
-          REACT_APP_DEFAULT_HOST_URL: https://host.plasmicdev.rcf.dev/static/host.html
         run: |
-          # Export the environment variable explicitly
-          export REACT_APP_DEFAULT_HOST_URL="https://host.plasmicdev.rcf.dev/static/host.html"
-          echo "Building with REACT_APP_DEFAULT_HOST_URL=$REACT_APP_DEFAULT_HOST_URL"
+          echo "Building with environment from .env file"
           yarn build
           echo "✅ Frontend built successfully"
           ls -la build/
