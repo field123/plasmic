@@ -1,5 +1,6 @@
 import { DbMgr } from "@/wab/server/db/DbMgr";
 import { Project } from "@/wab/server/entities/Entities";
+import { logger } from "@/wab/server/observability";
 import {
   LATEST_LOADER_VERSION,
   LOADER_ASSETS_BUCKET,
@@ -298,6 +299,16 @@ export function makeGenPublishedLoaderCodeBundleOpts(opts: {
 }
 
 export async function buildLatestLoaderAssets(req: Request, res: Response) {
+  // Log the incoming request details to debug 404 issues
+  logger().info("buildLatestLoaderAssets:start", {
+    url: req.originalUrl,
+    projectId: req.query.projectId,
+    projectTokenHeader: req.headers["x-plasmic-api-project-tokens"] ? "present" : "absent",
+    method: req.method,
+    userAgent: req.headers["user-agent"],
+    requestId: req.id,
+  });
+
   const mgr = userDbMgr(req);
   const {
     platform,
@@ -341,11 +352,29 @@ export async function buildLatestLoaderAssets(req: Request, res: Response) {
       }
     })
   );
-  await Promise.all(
-    projectIdsBranches.map(({ id }) =>
-      mgr.checkProjectPerms(id, "viewer", "get")
-    )
-  );
+  
+  // Log project IDs being checked
+  logger().info("buildLatestLoaderAssets:checkingPerms", {
+    projectIds: projectIdsBranches.map(p => p.id),
+    requestId: req.id,
+  });
+
+  try {
+    await Promise.all(
+      projectIdsBranches.map(({ id }) =>
+        mgr.checkProjectPerms(id, "viewer", "get")
+      )
+    );
+  } catch (error) {
+    logger().error("buildLatestLoaderAssets:permCheckFailed", {
+      error: error.message,
+      errorType: error.constructor.name,
+      projectIds: projectIdsBranches.map(p => p.id),
+      requestId: req.id,
+      stack: error.stack?.split('\n').slice(0, 5),
+    });
+    throw error;
+  }
 
   // We set the projectIds and their current revisions as weak e-tag.  If the browser
   // sends a if-none-match with the same e-tag, we can check if any project has since

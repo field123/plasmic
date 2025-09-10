@@ -1,4 +1,5 @@
 import { sequentially } from "@/wab/commons/asyncutil";
+import { logger } from "@/wab/server/observability";
 import * as semver from "@/wab/commons/semver";
 import { toOpaque } from "@/wab/commons/types";
 import { createSiteForHostlessProject } from "@/wab/server/code-components/code-components";
@@ -2498,20 +2499,59 @@ export class DbMgr implements MigrationDbMgr {
         return;
       }
 
-      const project = await this.sudo().getProjectById(
+      // Log permission check start
+      logger().info("checkProjectPerms:start", {
         projectId,
-        includeDeleted
-      );
+        requireLevel,
+        action,
+        actorType: this.actor.type,
+        hasProjectTokens: !!this.projectIdsAndTokens,
+        tokenCount: this.projectIdsAndTokens?.length || 0,
+      });
+
+      let project;
+      try {
+        project = await this.sudo().getProjectById(
+          projectId,
+          includeDeleted
+        );
+      } catch (error) {
+        logger().error("checkProjectPerms:getProjectFailed", {
+          projectId,
+          error: error.message,
+          errorType: error.constructor.name,
+        });
+        throw error;
+      }
 
       // Having a valid project API token should give us read access.
+      const matchingToken = this.projectIdsAndTokens?.find(
+        (p) => p.projectId === projectId
+      );
+      
+      if (matchingToken) {
+        logger().info("checkProjectPerms:tokenCheck", {
+          projectId,
+          hasProjectApiToken: !!project.projectApiToken,
+          tokenMatches: matchingToken.projectApiToken === project.projectApiToken,
+          providedTokenLength: matchingToken.projectApiToken?.length,
+          dbTokenLength: project.projectApiToken?.length,
+          // Log first/last 5 chars for debugging without exposing full token
+          providedTokenPreview: matchingToken.projectApiToken ? 
+            `${matchingToken.projectApiToken.substring(0, 5)}...${matchingToken.projectApiToken.slice(-5)}` : 
+            "none",
+          dbTokenPreview: project.projectApiToken ? 
+            `${project.projectApiToken.substring(0, 5)}...${project.projectApiToken.slice(-5)}` : 
+            "none",
+        });
+      }
+      
       if (
         accessLevelRank(requireLevel) <= accessLevelRank("viewer") &&
-        this.projectIdsAndTokens?.find(
-          (p) =>
-            p.projectId === projectId &&
-            p.projectApiToken === project.projectApiToken
-        )
+        matchingToken &&
+        matchingToken.projectApiToken === project.projectApiToken
       ) {
+        logger().info("checkProjectPerms:tokenAccessGranted", { projectId });
         return;
       }
 
@@ -3152,7 +3192,19 @@ export class DbMgr implements MigrationDbMgr {
       undefined,
       includeDeleted
     );
-    return this._queryProjects({ id }, includeDeleted).getOne();
+    
+    const result = await this._queryProjects({ id }, includeDeleted).getOne();
+    
+    // Log if project not found in database
+    if (!result) {
+      logger().warn("tryGetProjectById:notFound", {
+        projectId: id,
+        includeDeleted,
+        actorType: this.actor.type,
+      });
+    }
+    
+    return result;
   }
 
   //

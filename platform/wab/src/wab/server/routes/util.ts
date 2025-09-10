@@ -70,6 +70,26 @@ export function userDbMgr(
   opts?: { allowUnverifiedEmail: boolean }
 ) {
   const isSpy = req.cookies["plasmic-spy"] === "true";
+  
+  // Parse tokens and log for debugging
+  const projectTokenHeader = req.headers["x-plasmic-api-project-tokens"];
+  const parsedTokens = parseProjectIdsAndTokensHeader(projectTokenHeader);
+  
+  // Log token parsing for debugging 404 issues
+  if (projectTokenHeader || req.body?.projectIdsAndTokens) {
+    console.error("[LOADER_DEBUG] userDbMgr:tokenParsing", {
+      headerValue: projectTokenHeader ? String(projectTokenHeader).substring(0, 100) + "..." : "none",
+      parsedTokensCount: parsedTokens?.length || 0,
+      parsedTokens: parsedTokens?.map(t => ({
+        projectId: t.projectId,
+        hasToken: !!t.projectApiToken,
+        tokenLength: t.projectApiToken?.length
+      })),
+      bodyTokensCount: req.body?.projectIdsAndTokens?.length || 0,
+      actor: req.user?.email || req.apiTeam?.id || "anonymous",
+    });
+  }
+  
   let dbMgr = new DbMgr(
     req.txMgr,
     req.user
@@ -80,9 +100,7 @@ export function userDbMgr(
     {
       projectIdsAndTokens:
         (req.body.projectIdsAndTokens as ProjectIdAndToken[] | undefined) ??
-        parseProjectIdsAndTokensHeader(
-          req.headers["x-plasmic-api-project-tokens"]
-        ),
+        parsedTokens,
       teamApiToken: req.body.teamApiToken ?? req.headers["x-plasmic-api-token"],
       temporaryTeamApiToken:
         req.body.sessionToken ?? req.headers["x-plasmic-api-session-token"],
