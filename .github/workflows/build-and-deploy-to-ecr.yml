@@ -94,14 +94,33 @@ jobs:
           role-session-name: GitHubActions-Deploy
           aws-region: ${{ env.AWS_REGION }}
 
-      - name: Deploy to ECS
+      - name: Update task definition and deploy
         run: |
           echo "🚀 Deploying image: ${{ needs.build-and-push.outputs.image-uri }}"
-
+          
+          # Download current task definition
+          aws ecs describe-task-definition \
+            --task-definition plasmic-wab \
+            --query taskDefinition > task-definition.json
+          
+          # Update the image in the task definition
+          jq --arg IMAGE "${{ needs.build-and-push.outputs.image-uri }}" \
+            '.containerDefinitions[0].image = $IMAGE | del(.taskDefinitionArn) | del(.revision) | del(.status) | del(.requiresAttributes) | del(.compatibilities) | del(.registeredAt) | del(.registeredBy)' \
+            task-definition.json > new-task-definition.json
+          
+          # Register the new task definition
+          TASK_REVISION=$(aws ecs register-task-definition \
+            --cli-input-json file://new-task-definition.json \
+            --query 'taskDefinition.revision' \
+            --output text)
+          
+          echo "✅ Registered new task definition revision: $TASK_REVISION"
+          
+          # Update service with new task definition
           aws ecs update-service \
             --cluster plasmic-test-cluster \
             --service plasmic-wab-service \
-            --force-new-deployment \
+            --task-definition plasmic-wab:$TASK_REVISION \
             --region ${{ env.AWS_REGION }}
 
           echo "⏳ Waiting for service to stabilize..."
@@ -111,3 +130,12 @@ jobs:
             --region ${{ env.AWS_REGION }}
 
           echo "✅ Deployment complete!"
+      
+      - name: Get deployment info
+        run: |
+          echo "📊 Deployment Summary:"
+          aws ecs describe-services \
+            --cluster plasmic-test-cluster \
+            --services plasmic-wab-service \
+            --query 'services[0].{Status:status,RunningCount:runningCount,DesiredCount:desiredCount,TaskDefinition:taskDefinition,Deployments:deployments[*].{Status:status,TaskDef:taskDefinition,RunningCount:runningCount}}' \
+            --output table
