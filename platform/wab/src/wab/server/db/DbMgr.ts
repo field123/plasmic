@@ -1,6 +1,6 @@
 import { sequentially } from "@/wab/commons/asyncutil";
-import { logger } from "@/wab/server/observability";
 import * as semver from "@/wab/commons/semver";
+import { logger } from "@/wab/server/observability";
 import { toOpaque } from "@/wab/commons/types";
 import { createSiteForHostlessProject } from "@/wab/server/code-components/code-components";
 import { loadConfig } from "@/wab/server/config";
@@ -2500,7 +2500,7 @@ export class DbMgr implements MigrationDbMgr {
       }
 
       // Log permission check start
-      logger().info("checkProjectPerms:start", {
+      logger().error("LOADER_DEBUG checkProjectPerms:start", {
         projectId,
         requireLevel,
         action,
@@ -2516,7 +2516,7 @@ export class DbMgr implements MigrationDbMgr {
           includeDeleted
         );
       } catch (error) {
-        logger().error("checkProjectPerms:getProjectFailed", {
+        logger().error("LOADER_DEBUG checkProjectPerms:getProjectFailed", {
           projectId,
           error: error.message,
           errorType: error.constructor.name,
@@ -2530,7 +2530,7 @@ export class DbMgr implements MigrationDbMgr {
       );
       
       if (matchingToken) {
-        logger().info("checkProjectPerms:tokenCheck", {
+        logger().error("LOADER_DEBUG checkProjectPerms:tokenCheck", {
           projectId,
           hasProjectApiToken: !!project.projectApiToken,
           tokenMatches: matchingToken.projectApiToken === project.projectApiToken,
@@ -2551,7 +2551,7 @@ export class DbMgr implements MigrationDbMgr {
         matchingToken &&
         matchingToken.projectApiToken === project.projectApiToken
       ) {
-        logger().info("checkProjectPerms:tokenAccessGranted", { projectId });
+        logger().error("LOADER_DEBUG checkProjectPerms:tokenAccessGranted", { projectId });
         return;
       }
 
@@ -3197,7 +3197,7 @@ export class DbMgr implements MigrationDbMgr {
     
     // Log if project not found in database
     if (!result) {
-      logger().warn("tryGetProjectById:notFound", {
+      logger().error("LOADER_DEBUG tryGetProjectById:notFound", {
         projectId: id,
         includeDeleted,
         actorType: this.actor.type,

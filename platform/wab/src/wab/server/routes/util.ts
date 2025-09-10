@@ -7,6 +7,7 @@ import {
 } from "@/wab/server/db/DbMgr";
 import { User } from "@/wab/server/entities/Entities";
 import "@/wab/server/extensions";
+import { logger } from "@/wab/server/observability";
 import { asyncTimed, callsToServerTiming } from "@/wab/server/timing-util";
 import {
   BadRequestError,
@@ -77,7 +78,7 @@ export function userDbMgr(
   
   // Log token parsing for debugging 404 issues
   if (projectTokenHeader || req.body?.projectIdsAndTokens) {
-    console.error("[LOADER_DEBUG] userDbMgr:tokenParsing", {
+    logger().error("LOADER_DEBUG userDbMgr:tokenParsing", {
       headerValue: projectTokenHeader ? String(projectTokenHeader).substring(0, 100) + "..." : "none",
       parsedTokensCount: parsedTokens?.length || 0,
       parsedTokens: parsedTokens?.map(t => ({

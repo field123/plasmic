@@ -299,17 +299,17 @@ export function makeGenPublishedLoaderCodeBundleOpts(opts: {
 }
 
 export async function buildLatestLoaderAssets(req: Request, res: Response) {
-  // Log the incoming request details to debug 404 issues
-  logger().info("buildLatestLoaderAssets:start", {
-    url: req.originalUrl,
-    projectId: req.query.projectId,
-    projectTokenHeader: req.headers["x-plasmic-api-project-tokens"] ? "present" : "absent",
-    method: req.method,
-    userAgent: req.headers["user-agent"],
-    requestId: req.id,
-  });
+  try {
+    // Log the incoming request details to debug 404 issues
+    logger().error("LOADER_DEBUG buildLatestLoaderAssets:start", {
+      url: req.originalUrl,
+      projectId: req.query.projectId,
+      projectTokenHeader: req.headers["x-plasmic-api-project-tokens"] ? "present" : "absent",
+      method: req.method,
+      userAgent: req.headers["user-agent"],
+    });
 
-  const mgr = userDbMgr(req);
+    const mgr = userDbMgr(req);
   const {
     platform,
     nextjsAppDir,
@@ -354,9 +354,8 @@ export async function buildLatestLoaderAssets(req: Request, res: Response) {
   );
   
   // Log project IDs being checked
-  logger().info("buildLatestLoaderAssets:checkingPerms", {
+  logger().error("LOADER_DEBUG buildLatestLoaderAssets:checkingPerms", {
     projectIds: projectIdsBranches.map(p => p.id),
-    requestId: req.id,
   });
 
   try {
@@ -366,11 +365,10 @@ export async function buildLatestLoaderAssets(req: Request, res: Response) {
       )
     );
   } catch (error) {
-    logger().error("buildLatestLoaderAssets:permCheckFailed", {
+    logger().error("LOADER_DEBUG buildLatestLoaderAssets:permCheckFailed", {
       error: error.message,
       errorType: error.constructor.name,
       projectIds: projectIdsBranches.map(p => p.id),
-      requestId: req.id,
       stack: error.stack?.split('\n').slice(0, 5),
     });
     throw error;
@@ -417,6 +415,15 @@ export async function buildLatestLoaderAssets(req: Request, res: Response) {
   });
 
   res.json(result);
+  } catch (error) {
+    logger().error("LOADER_DEBUG buildLatestLoaderAssets:uncaughtError", {
+      error: error.message,
+      errorType: error.constructor.name,
+      stack: error.stack?.split('\n').slice(0, 5),
+      projectId: req.query.projectId,
+    });
+    throw error;
+  }
 }
 
 export async function getLoaderChunk(req: Request, res: Response) {

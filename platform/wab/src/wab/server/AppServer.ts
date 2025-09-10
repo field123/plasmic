@@ -456,6 +456,25 @@ export function addLoggingMiddleware(app: express.Application) {
   );
   app.use((req: Request, res: any, next) => {
     const start = Date.now();
+    
+    // Debug logging for loader endpoints - fires immediately on request arrival
+    if (req.path && req.path.includes("/api/v1/loader/code/preview")) {
+      logger().error("LOADER_DEBUG request:arrived", {
+        method: req.method,
+        path: req.path,
+        url: req.url,
+        originalUrl: req.originalUrl,
+        headers: {
+          host: req.headers.host,
+          hasProjectTokens: !!req.headers["x-plasmic-api-project-tokens"],
+          userAgent: req.headers["user-agent"]?.substring(0, 100),
+        },
+        query: {
+          projectId: req.query?.projectId,
+        },
+        requestId: req.id,
+      });
+    }
     res.on("finish", () => {
       const duration = Date.now() - start;
       logger().info(
@@ -1169,6 +1188,19 @@ export function addCodegenRoutes(app: express.Application) {
   app.get(
     "/api/v1/loader/code/preview",
     cors(),
+    (req, res, next) => {
+      // Debug logging to confirm route is matched
+      logger().error("LOADER_DEBUG route:matched", {
+        path: req.path,
+        url: req.url,
+        originalUrl: req.originalUrl,
+        projectId: req.query.projectId,
+        headers: {
+          hasProjectTokens: !!req.headers["x-plasmic-api-project-tokens"],
+        }
+      });
+      next();
+    },
     apiAuth,
     withNext(buildLatestLoaderAssets)
   );
