@@ -2577,6 +2577,17 @@ export class DbMgr implements MigrationDbMgr {
       }
 
       const selfLevel = await this._getActorAccessLevelToProject(project);
+      
+      // Debug logging for project access level
+      logger().info("Project access level check", {
+        projectId,
+        selfLevel,
+        requireLevel,
+        actor: await this.describeActor(),
+        actorType: this.actor.type,
+        projectName: project.name
+      });
+      
       const msg = `${await this.describeActor()} tried to ${action} project ${projectId}, but their access level ${humanLevel(
         selfLevel
       )} didn't meet required level ${humanLevel(requireLevel)}. ${
@@ -5537,6 +5548,16 @@ export class DbMgr implements MigrationDbMgr {
       const userId = this.checkNormalUser();
       const user = await this.getUserById(userId);
       const isAdmin = isAdminTeamEmail(user.email, DEVFLAGS);
+
+      // Debug logging for admin check
+      logger().info("Admin permission check", {
+        email: user.email,
+        adminTeamDomain: DEVFLAGS.adminTeamDomain,
+        isAdmin,
+        endsWithDomain: user.email.endsWith(`@${DEVFLAGS.adminTeamDomain}`),
+        emailDomain: user.email.split('@')[1],
+        nodeEnv: process.env.NODE_ENV
+      });
 
       const allPerms = (
         await this.sudo().getPermissionsForResources(taggedResourceIds, false)
