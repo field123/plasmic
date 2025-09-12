@@ -3,6 +3,7 @@ import * as semver from "@/wab/commons/semver";
 import { toOpaque } from "@/wab/commons/types";
 import { ProjectVersionMeta, VersionResolution } from "@/wab/commons/versions";
 import { createBranchFromBase } from "@/wab/server/branch";
+import { logger } from "@/wab/server/observability";
 import { reevaluateDataSourceExprOpIds } from "@/wab/server/data-sources/data-source-utils";
 import {
   getLastBundleVersion,
@@ -354,6 +355,16 @@ export async function importProject(req: Request, res: Response) {
     | ProjectFullDataResponse;
   const mgr = userDbMgr(req);
 
+  // Debug logging for import
+  logger().info("Import project request", {
+    bundlesIsArray: Array.isArray(bundles),
+    bundlesLength: Array.isArray(bundles) ? bundles.length : undefined,
+    firstBundleRoot: Array.isArray(bundles) && bundles.length > 0 ? bundles[0][1].root : undefined,
+    firstBundleRootType: Array.isArray(bundles) && bundles.length > 0 && bundles[0][1].map ? bundles[0][1].map[bundles[0][1].root]?.__type : undefined,
+    bundleVersion: Array.isArray(bundles) && bundles.length > 0 ? bundles[0][1].version : undefined,
+    options: { name, publish, keepProjectIdsAndNames, updateImportedHostLess }
+  });
+
   if (!Array.isArray(bundles)) {
     const project = await importFullProjectData(bundles, mgr, req.bundler);
     res.json({
@@ -365,12 +376,27 @@ export async function importProject(req: Request, res: Response) {
 
   const bundler = req.bundler;
 
-  const project = await doImportProject(bundles, mgr, bundler, {
-    projectName: name,
-    keepProjectIdsAndNames,
-    dataSourceReplacement,
-    migrationsStrict,
-  });
+  let project;
+  try {
+    project = await doImportProject(bundles, mgr, bundler, {
+      projectName: name,
+      keepProjectIdsAndNames,
+      dataSourceReplacement,
+      migrationsStrict,
+    });
+  } catch (error) {
+    logger().error("Import project failed", {
+      error: error instanceof Error ? error.message : String(error),
+      errorName: error instanceof Error ? error.name : undefined,
+      errorStack: error instanceof Error ? error.stack : undefined,
+      bundleInfo: {
+        count: bundles.length,
+        lastBundleRootType: bundles.length > 0 ? bundles[bundles.length - 1][1].map[bundles[bundles.length - 1][1].root]?.__type : undefined,
+        version: bundles.length > 0 ? bundles[bundles.length - 1][1].version : undefined
+      }
+    });
+    throw error;
+  }
   req.promLabels.projectId = project.id;
 
   if (name) {
@@ -427,6 +453,18 @@ export async function doImportProject(
     last(bundles),
     "Couldn't find last bundle"
   );
+  
+  // Debug logging for import details
+  logger().info("doImportProject details", {
+    totalBundles: bundles.length,
+    depBundlesCount: depBundles.length,
+    siteBundleRoot: siteBundle.root,
+    siteBundleRootType: siteBundle.map[siteBundle.root]?.__type,
+    siteBundleVersion: siteBundle.version,
+    keepProjectIdsAndNames: opts?.keepProjectIdsAndNames,
+    projectName: opts?.projectName
+  });
+  
   const oldToNewUuid = new Map<string, string>();
   const newPkgVersionById = new Map<string, PkgVersion>();
 
