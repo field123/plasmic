@@ -161,6 +161,13 @@ import {
   deleteTrustedHost,
   getTrustedHostsForSelf,
 } from "@/wab/server/routes/hosts";
+import {
+  queryCopilot,
+  queryUiCopilot,
+  queryPublicUiCopilot,
+  sendCopilotFeedback,
+  queryCopilotFeedback,
+} from "@/wab/server/routes/copilot";
 import { uploadImage } from "@/wab/server/routes/image";
 import {
   buildLatestLoaderAssets,
@@ -1272,6 +1279,21 @@ export function addCodegenRoutes(app: express.Application) {
     "/static/js/loader-hydrate.:hash.js",
     withNext(getHydrationScriptVersioned)
   );
+}
+
+export function addCopilotRoutes(app: express.Application) {
+  // Main copilot endpoint for code/chat/sql/debug
+  app.post("/api/v1/copilot", apiAuth, withNext(queryCopilot));
+
+  // UI copilot endpoint for HTML/token generation
+  app.post("/api/v1/copilot/ui", apiAuth, withNext(queryUiCopilot));
+
+  // Public UI copilot endpoint (no auth required)
+  app.post("/api/v1/copilot/ui/public", withNext(queryPublicUiCopilot));
+
+  // Copilot feedback endpoints
+  app.post("/api/v1/copilot-feedback", apiAuth, withNext(sendCopilotFeedback));
+  app.get("/api/v1/copilot-feedback", apiAuth, withNext(queryCopilotFeedback));
 }
 
 export function addMainAppServerRoutes(
