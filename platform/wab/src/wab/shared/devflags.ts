@@ -451,7 +451,7 @@ const DEFAULT_DEVFLAGS = {
   spacing: true,
   spacingArea: true,
   setHostLessProject: false,
-  plasmicHostingSubdomainSuffix: "plasmic.run",
+  plasmicHostingSubdomainSuffix: "elasticpath.run",
   splits: true,
   refActions: false,
   multiSelect: false,
