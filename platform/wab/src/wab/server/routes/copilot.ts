@@ -1,21 +1,24 @@
-import { Request, Response } from "express";
 import {
+  createAnthropicClient,
+  createOpenAIClient,
+} from "@/wab/server/copilot/llms";
+import { executeUiCopilotChain } from "@/wab/server/copilot/ui-copilot-chain";
+import { DbMgr } from "@/wab/server/db/DbMgr";
+import { getUser, superDbMgr, userDbMgr } from "@/wab/server/routes/util";
+import {
+  CopilotInteractionId,
+  PublicCopilotInteractionId,
+  PublicQueryCopilotUiRequest,
+  PublicQueryCopilotUiResponse,
+  QueryCopilotFeedbackRequest,
   QueryCopilotRequest,
   QueryCopilotResponse,
   QueryCopilotUiRequest,
   QueryCopilotUiResponse,
-  PublicQueryCopilotUiRequest,
-  PublicQueryCopilotUiResponse,
   SendCopilotFeedbackRequest,
-  QueryCopilotFeedbackRequest,
-  QueryCopilotFeedbackResponse,
-  CopilotInteractionId,
-  PublicCopilotInteractionId,
 } from "@/wab/shared/ApiSchema";
 import { mkShortId } from "@/wab/shared/common";
-import { createOpenAIClient, createAnthropicClient } from "@/wab/server/copilot/llms";
-import { getUser, userDbMgr, superDbMgr } from "@/wab/server/routes/util";
-import { DbMgr } from "@/wab/server/db/DbMgr";
+import { Request, Response } from "express";
 
 // Handler for main copilot queries (chat, code, sql, debug)
 export async function queryCopilot(req: Request, res: Response) {
@@ -49,10 +52,10 @@ export async function queryCopilot(req: Request, res: Response) {
 
     res.json(response);
   } catch (error: any) {
-    if (error.name === 'CopilotRateLimitExceededError') {
-      return res.status(429).json({ 
+    if (error.name === "CopilotRateLimitExceededError") {
+      return res.status(429).json({
         error: "Rate limit exceeded",
-        message: error.message || "You have reached your copilot usage limit"
+        message: error.message || "You have reached your copilot usage limit",
       });
     }
     console.error("Copilot error:", error);
@@ -80,7 +83,7 @@ export async function queryUiCopilot(req: Request, res: Response) {
       response: JSON.stringify(data),
       model: request.useClaude ? "claude" : "gpt",
       projectId: request.projectId,
-      request: { messages: [], model: "gpt-3.5-turbo" } // TODO: Add proper request object
+      request: { messages: [], model: "gpt-3.5-turbo" }, // TODO: Add proper request object
     });
 
     // TODO: Track usage
@@ -92,10 +95,10 @@ export async function queryUiCopilot(req: Request, res: Response) {
 
     res.json(response);
   } catch (error: any) {
-    if (error.name === 'CopilotRateLimitExceededError') {
-      return res.status(429).json({ 
+    if (error.name === "CopilotRateLimitExceededError") {
+      return res.status(429).json({
         error: "Rate limit exceeded",
-        message: error.message || "You have reached your copilot usage limit"
+        message: error.message || "You have reached your copilot usage limit",
       });
     }
     console.error("UI Copilot error:", error);
@@ -185,54 +188,79 @@ export async function queryCopilotFeedback(req: Request, res: Response) {
 }
 
 // Helper functions for handling different query types
-async function handleChatQuery(mgr: DbMgr, request: any, user: any): Promise<QueryCopilotResponse> {
+async function handleChatQuery(
+  mgr: DbMgr,
+  request: any,
+  user: any
+): Promise<QueryCopilotResponse> {
   // TODO: Implement chat query logic
   // TODO: Implement chat query logic
-  const client = request.useClaude ? createAnthropicClient(mgr) : createOpenAIClient(mgr);
-  
+  const client = request.useClaude
+    ? createAnthropicClient(mgr)
+    : createOpenAIClient(mgr);
+
   // For now, return a placeholder response
   return {
     response: "Chat query handler not yet implemented",
   };
 }
 
-async function handleCodeQuery(mgr: DbMgr, request: any, user: any): Promise<QueryCopilotResponse> {
+async function handleCodeQuery(
+  mgr: DbMgr,
+  request: any,
+  user: any
+): Promise<QueryCopilotResponse> {
   // TODO: Implement code generation logic
   return {
     response: "Code query handler not yet implemented",
   };
 }
 
-async function handleSqlQuery(mgr: DbMgr, request: any, user: any): Promise<QueryCopilotResponse> {
+async function handleSqlQuery(
+  mgr: DbMgr,
+  request: any,
+  user: any
+): Promise<QueryCopilotResponse> {
   // TODO: Implement SQL generation logic
   return {
     response: "SQL query handler not yet implemented",
   };
 }
 
-async function handleDebugQuery(mgr: DbMgr, request: any, user: any): Promise<QueryCopilotResponse> {
+async function handleDebugQuery(
+  mgr: DbMgr,
+  request: any,
+  user: any
+): Promise<QueryCopilotResponse> {
   // TODO: Implement debug query logic
   return {
     response: "Debug query handler not yet implemented",
   };
 }
 
-async function handleUiQuery(mgr: DbMgr, request: QueryCopilotUiRequest, user: any): Promise<any> {
-  // TODO: Implement UI generation logic
-  return {
-    actions: [
-      {
-        name: "insert-html",
-        data: {
-          html: "<div>UI generation not yet implemented</div>",
-        },
-      },
-    ],
-  };
+async function handleUiQuery(
+  mgr: DbMgr,
+  request: QueryCopilotUiRequest,
+  user: any
+): Promise<any> {
+  // Execute the UI copilot chain to generate UI
+  const result = await executeUiCopilotChain(
+    {
+      goal: request.goal,
+      tokens: request.tokens,
+      images: request.images,
+      isPublicMode: false,
+    },
+    mgr
+  );
+
+  return result;
 }
 
-async function handlePublicUiQuery(mgr: DbMgr, request: PublicQueryCopilotUiRequest): Promise<any> {
-  // TODO: Implement public UI generation logic
+async function handlePublicUiQuery(
+  mgr: DbMgr,
+  request: PublicQueryCopilotUiRequest
+): Promise<any> {
   return {
     actions: [
       {
@@ -243,4 +271,13 @@ async function handlePublicUiQuery(mgr: DbMgr, request: PublicQueryCopilotUiRequ
       },
     ],
   };
+  // // Execute the UI copilot chain for public requests
+  // const result = await executeUiCopilotChain({
+  //   goal: request.goal,
+  //   tokens: undefined, // No tokens for public mode
+  //   images: undefined, // No images for public mode
+  //   isPublicMode: true,
+  // }, mgr);
+
+  // return result;
 }
