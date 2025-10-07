@@ -7,7 +7,6 @@ import {
 } from "@/wab/server/db/DbMgr";
 import { User } from "@/wab/server/entities/Entities";
 import "@/wab/server/extensions";
-import { logger } from "@/wab/server/observability";
 import { asyncTimed, callsToServerTiming } from "@/wab/server/timing-util";
 import {
   BadRequestError,
@@ -71,26 +70,6 @@ export function userDbMgr(
   opts?: { allowUnverifiedEmail: boolean }
 ) {
   const isSpy = req.cookies["plasmic-spy"] === "true";
-  
-  // Parse tokens and log for debugging
-  const projectTokenHeader = req.headers["x-plasmic-api-project-tokens"];
-  const parsedTokens = parseProjectIdsAndTokensHeader(projectTokenHeader);
-  
-  // Log token parsing for debugging 404 issues
-  if (projectTokenHeader || req.body?.projectIdsAndTokens) {
-    logger().error("LOADER_DEBUG userDbMgr:tokenParsing", {
-      headerValue: projectTokenHeader ? String(projectTokenHeader).substring(0, 100) + "..." : "none",
-      parsedTokensCount: parsedTokens?.length || 0,
-      parsedTokens: parsedTokens?.map(t => ({
-        projectId: t.projectId,
-        hasToken: !!t.projectApiToken,
-        tokenLength: t.projectApiToken?.length
-      })),
-      bodyTokensCount: req.body?.projectIdsAndTokens?.length || 0,
-      actor: req.user?.email || req.apiTeam?.id || "anonymous",
-    });
-  }
-  
   let dbMgr = new DbMgr(
     req.txMgr,
     req.user
@@ -101,7 +80,9 @@ export function userDbMgr(
     {
       projectIdsAndTokens:
         (req.body.projectIdsAndTokens as ProjectIdAndToken[] | undefined) ??
-        parsedTokens,
+        parseProjectIdsAndTokensHeader(
+          req.headers["x-plasmic-api-project-tokens"]
+        ),
       teamApiToken: req.body.teamApiToken ?? req.headers["x-plasmic-api-token"],
       temporaryTeamApiToken:
         req.body.sessionToken ?? req.headers["x-plasmic-api-session-token"],
