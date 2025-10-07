@@ -161,6 +161,13 @@ import {
   deleteTrustedHost,
   getTrustedHostsForSelf,
 } from "@/wab/server/routes/hosts";
+import {
+  queryCopilot,
+  queryUiCopilot,
+  queryPublicUiCopilot,
+  sendCopilotFeedback,
+  queryCopilotFeedback,
+} from "@/wab/server/routes/copilot";
 import { uploadImage } from "@/wab/server/routes/image";
 import {
   buildLatestLoaderAssets,
@@ -200,6 +207,7 @@ import {
   createPkgByProjectId,
   createProject,
   createProjectWithHostlessPackages,
+  debugMigrations,
   deleteBranch,
   deleteProject,
   fmtCode,
@@ -455,6 +463,25 @@ export function addLoggingMiddleware(app: express.Application) {
   );
   app.use((req: Request, res: any, next) => {
     const start = Date.now();
+    
+    // Debug logging for loader endpoints - fires immediately on request arrival
+    if (req.path && req.path.includes("/api/v1/loader/code/preview")) {
+      logger().error("LOADER_DEBUG request:arrived", {
+        method: req.method,
+        path: req.path,
+        url: req.url,
+        originalUrl: req.originalUrl,
+        headers: {
+          host: req.headers.host,
+          hasProjectTokens: !!req.headers["x-plasmic-api-project-tokens"],
+          userAgent: req.headers["user-agent"]?.substring(0, 100),
+        },
+        query: {
+          projectId: req.query?.projectId,
+        },
+        requestId: req.id,
+      });
+    }
     res.on("finish", () => {
       const duration = Date.now() - start;
       logger().info(
@@ -1168,6 +1195,19 @@ export function addCodegenRoutes(app: express.Application) {
   app.get(
     "/api/v1/loader/code/preview",
     cors(),
+    (req, res, next) => {
+      // Debug logging to confirm route is matched
+      logger().error("LOADER_DEBUG route:matched", {
+        path: req.path,
+        url: req.url,
+        originalUrl: req.originalUrl,
+        projectId: req.query.projectId,
+        headers: {
+          hasProjectTokens: !!req.headers["x-plasmic-api-project-tokens"],
+        }
+      });
+      next();
+    },
     apiAuth,
     withNext(buildLatestLoaderAssets)
   );
@@ -1239,6 +1279,21 @@ export function addCodegenRoutes(app: express.Application) {
     "/static/js/loader-hydrate.:hash.js",
     withNext(getHydrationScriptVersioned)
   );
+}
+
+export function addCopilotRoutes(app: express.Application) {
+  // Main copilot endpoint for code/chat/sql/debug
+  app.post("/api/v1/copilot", apiAuth, withNext(queryCopilot));
+
+  // UI copilot endpoint for HTML/token generation
+  app.post("/api/v1/copilot/ui", apiAuth, withNext(queryUiCopilot));
+
+  // Public UI copilot endpoint (no auth required)
+  app.post("/api/v1/copilot/ui/public", withNext(queryPublicUiCopilot));
+
+  // Copilot feedback endpoints
+  app.post("/api/v1/copilot-feedback", apiAuth, withNext(sendCopilotFeedback));
+  app.get("/api/v1/copilot-feedback", apiAuth, withNext(queryCopilotFeedback));
 }
 
 export function addMainAppServerRoutes(
@@ -1568,6 +1623,7 @@ export function addMainAppServerRoutes(
   app.get("/api/v1/plume-pkg", withNext(getPlumePkg));
   app.get("/api/v1/plume-pkg/versions", withNext(getPlumePkgVersionStrings));
   app.get("/api/v1/plume-pkg/latest", withNext(getLatestPlumePkg));
+  app.get("/api/v1/debug/migrations", withNext(debugMigrations));
   app.get("/api/v1/pkgs/:pkgId", withNext(getPkgVersion));
   app.get(
     "/api/v1/pkgs/projectId/:projectId",
@@ -2180,7 +2236,13 @@ export function makeExpressSessionMiddleware(config: Config) {
       cleanupLimit: 0,
       // By not using a subquery, maybe less likely for deadlock
       limitSubquery: false,
-      onError: () => {},
+      onError: (store, error) => {
+        logger().error("Session store error", {
+          error: error.message,
+          stack: error.stack,
+          name: error.name
+        });
+      },
       //ttl: 86400,
     }).connect(getConnection().getRepository(ExpressSession)),
   });

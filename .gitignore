@@ -40,3 +40,7 @@ storybook-static/
 # ignore decrypted yaml files by sops
 *.dec.*
 dist/
+
+.history/
+
+investigation/
