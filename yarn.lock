@@ -2538,10 +2538,10 @@
   dependencies:
     tslib "^2.5.0"
 
-"@epcc-sdk/sdks-shopper@^0.0.36":
-  version "0.0.36"
-  resolved "https://registry.yarnpkg.com/@epcc-sdk/sdks-shopper/-/sdks-shopper-0.0.36.tgz#4ebb403e2fd1033a239ab01c0b1bb03b819d92ca"
-  integrity sha512-M2vtqi+tv5dg7ELk+pXuvZzkaYT+XF3xLmyXZvlo20E36Fga/+WuZH05kdjuduLD7gm3xxmyY7ttKD/7sH/ifw==
+"@epcc-sdk/sdks-shopper@^0.0.40":
+  version "0.0.40"
+  resolved "https://registry.yarnpkg.com/@epcc-sdk/sdks-shopper/-/sdks-shopper-0.0.40.tgz#15b18bc558677a1fc845c4ac47be89c2bbb957ee"
+  integrity sha512-N7a9O0E5s5lPx++SYTJ/hKWIqZ5cwF+WObPwycEsTk4RErT2QzLviy3vaCByMafS3Oj4rlsrcrBq6eQIDkv5rg==
   dependencies:
     "@hey-api/client-fetch" "0.6.0"
 
