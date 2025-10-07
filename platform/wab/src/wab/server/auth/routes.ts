@@ -807,18 +807,6 @@ export function apiAuth(
   res: Response | null,
   next: NextFunction
 ) {
-  // Debug logging for 404 issue
-  if (req.path === "/api/v1/loader/code/preview") {
-    logger().error("LOADER_DEBUG apiAuth:checking", {
-      path: req.path,
-      hasProjectTokensBody: !!req.body.projectIdsAndTokens,
-      hasProjectTokensHeader: !!req.headers["x-plasmic-api-project-tokens"],
-      hasCmsTokensHeader: !!req.headers["x-plasmic-api-cms-tokens"],
-      hasUser: !!req.user,
-      method: req.method,
-    });
-  }
-  
   // Simply having a projectIdsAndTokens (even if it's empty/invalid) in the
   // body means we don't have to provide more user friendly checks. The actual
   // authorization depends on the specific projects accessed by the API method.

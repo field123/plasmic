@@ -1,6 +1,5 @@
 import { sequentially } from "@/wab/commons/asyncutil";
 import * as semver from "@/wab/commons/semver";
-import { logger } from "@/wab/server/observability";
 import { toOpaque } from "@/wab/commons/types";
 import { createSiteForHostlessProject } from "@/wab/server/code-components/code-components";
 import { loadConfig } from "@/wab/server/config";
@@ -2499,59 +2498,20 @@ export class DbMgr implements MigrationDbMgr {
         return;
       }
 
-      // Log permission check start
-      logger().error("LOADER_DEBUG checkProjectPerms:start", {
+      const project = await this.sudo().getProjectById(
         projectId,
-        requireLevel,
-        action,
-        actorType: this.actor.type,
-        hasProjectTokens: !!this.projectIdsAndTokens,
-        tokenCount: this.projectIdsAndTokens?.length || 0,
-      });
-
-      let project;
-      try {
-        project = await this.sudo().getProjectById(
-          projectId,
-          includeDeleted
-        );
-      } catch (error) {
-        logger().error("LOADER_DEBUG checkProjectPerms:getProjectFailed", {
-          projectId,
-          error: error.message,
-          errorType: error.constructor.name,
-        });
-        throw error;
-      }
+        includeDeleted
+      );
 
       // Having a valid project API token should give us read access.
-      const matchingToken = this.projectIdsAndTokens?.find(
-        (p) => p.projectId === projectId
-      );
-      
-      if (matchingToken) {
-        logger().error("LOADER_DEBUG checkProjectPerms:tokenCheck", {
-          projectId,
-          hasProjectApiToken: !!project.projectApiToken,
-          tokenMatches: matchingToken.projectApiToken === project.projectApiToken,
-          providedTokenLength: matchingToken.projectApiToken?.length,
-          dbTokenLength: project.projectApiToken?.length,
-          // Log first/last 5 chars for debugging without exposing full token
-          providedTokenPreview: matchingToken.projectApiToken ? 
-            `${matchingToken.projectApiToken.substring(0, 5)}...${matchingToken.projectApiToken.slice(-5)}` : 
-            "none",
-          dbTokenPreview: project.projectApiToken ? 
-            `${project.projectApiToken.substring(0, 5)}...${project.projectApiToken.slice(-5)}` : 
-            "none",
-        });
-      }
-      
       if (
         accessLevelRank(requireLevel) <= accessLevelRank("viewer") &&
-        matchingToken &&
-        matchingToken.projectApiToken === project.projectApiToken
+        this.projectIdsAndTokens?.find(
+          (p) =>
+            p.projectId === projectId &&
+            p.projectApiToken === project.projectApiToken
+        )
       ) {
-        logger().error("LOADER_DEBUG checkProjectPerms:tokenAccessGranted", { projectId });
         return;
       }
 
@@ -2577,17 +2537,6 @@ export class DbMgr implements MigrationDbMgr {
       }
 
       const selfLevel = await this._getActorAccessLevelToProject(project);
-      
-      // Debug logging for project access level
-      logger().info("Project access level check", {
-        projectId,
-        selfLevel,
-        requireLevel,
-        actor: await this.describeActor(),
-        actorType: this.actor.type,
-        projectName: project.name
-      });
-      
       const msg = `${await this.describeActor()} tried to ${action} project ${projectId}, but their access level ${humanLevel(
         selfLevel
       )} didn't meet required level ${humanLevel(requireLevel)}. ${
@@ -3203,19 +3152,7 @@ export class DbMgr implements MigrationDbMgr {
       undefined,
       includeDeleted
     );
-    
-    const result = await this._queryProjects({ id }, includeDeleted).getOne();
-    
-    // Log if project not found in database
-    if (!result) {
-      logger().error("LOADER_DEBUG tryGetProjectById:notFound", {
-        projectId: id,
-        includeDeleted,
-        actorType: this.actor.type,
-      });
-    }
-    
-    return result;
+    return this._queryProjects({ id }, includeDeleted).getOne();
   }
 
   //
@@ -5548,16 +5485,6 @@ export class DbMgr implements MigrationDbMgr {
       const userId = this.checkNormalUser();
       const user = await this.getUserById(userId);
       const isAdmin = isAdminTeamEmail(user.email, DEVFLAGS);
-
-      // Debug logging for admin check
-      logger().info("Admin permission check", {
-        email: user.email,
-        adminTeamDomain: DEVFLAGS.adminTeamDomain,
-        isAdmin,
-        endsWithDomain: user.email.endsWith(`@${DEVFLAGS.adminTeamDomain}`),
-        emailDomain: user.email.split('@')[1],
-        nodeEnv: process.env.NODE_ENV
-      });
 
       const allPerms = (
         await this.sudo().getPermissionsForResources(taggedResourceIds, false)
